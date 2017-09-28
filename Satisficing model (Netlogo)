@@ -1,0 +1,644 @@
+;extensions [r]
+
+
+globals [
+  TP-coal                      ;; starting value of the model
+  TP-without-terminal          ;; if there is still a terminal with enough expansion capacity
+  remaining-added-TP
+  TP-to-transfer
+  TP_Coal_CD_model_NL
+  key-figure-truck-infra
+  key-figure-train-infra
+  key-figure-barge-infra
+  key-figure-truck-emission
+  key-figure-train-emission
+  key-figure-barge-emission
+  year
+  source-name
+  R-model-name
+  source-nameR
+  data-terminals
+  data-areas
+  total-TP-rdam
+  total-surface-terminals
+  test1
+  TP-without-terminal-list
+  total-TP-rdam-list
+  total-surface-terminals-list
+  ]
+
+breed [terminals terminal]
+breed [areas area]
+
+terminals-own [
+  terminal-name
+  terminal-area
+  terminal-cap-initial
+  terminal-cap-current
+  terminal-cap-EP
+  terminal-cap-available
+  terminal-cap-unused
+  terminal-EP?
+  terminal-cap-expanded
+  terminal-TP-initial
+  terminal-TP-final
+  terminal-TP-to-be-checked
+  terminal-TP-truck
+  terminal-TP-train
+  terminal-TP-barge
+  terminal-MS
+  terminal-cargo-type
+  terminal-modalsplit-truck
+  terminal-modalsplit-train
+  terminal-modalsplit-barge
+  terminal-no-truck
+  terminal-no-barge
+  terminal-no-train
+  terminal-infra-environment-check-result
+  terminal-infra-check-denied-cap
+  terminal-infra-check-denied-cap-final
+  terminal-environment-check-denied-cap
+  terminal-environment-check-denied-cap-final
+  terminal-environment-check-denied-cap-final-percentage
+  terminal-infra-environment-check-denied-cap
+  terminal-id
+  terminal-asked-already?
+  terminal-under-cap-final
+  terminal-current-infra-truck
+  terminal-current-infra-train
+  terminal-current-infra-barge
+  terminal-current-infra-truck-available
+  terminal-current-infra-train-available
+  terminal-current-infra-barge-available
+  infra-check-truck
+  infra-check-train
+  infra-check-barge
+  denied-no-truck
+  denied-no-train
+  denied-no-barge
+  denied-cap
+  infra-check
+  terminal-emission
+  terminal-no-truck-environment-check
+  terminal-no-train-environment-check
+  terminal-no-barge-environment-check
+  terminal-occupancy
+  terminal-total-TP-asked-to-check
+  terminal-construction-year
+  terminal-construction-capacity
+  terminal-surface
+  terminal-cargo-type-new
+  terminal-cap-current-list
+  terminal-cap-unused-list
+  terminal-TP-final-list
+  terminal-occupancy-list
+  terminal-cap-expanded-list
+  terminal-cap-initial-list
+  terminal-infra-check-denied-cap-final-list
+  terminal-surface-list
+
+
+]
+
+areas-own [
+  area-name
+  terminals-in-area
+  area-cap-initial
+  area-cap-current
+  area-cap-final
+  area-cap-available
+  area-cap-EP
+  area-cap-expanded
+  area-cap-unused
+  area-TP-initial
+  area-TP-current
+  area-TP-final
+  need-to-find-other-area
+  area-id
+  ;remaining-added-TP
+  area-under-cap
+  area-added-TP
+  number-of-terminals-in-area
+  area-under-cap-final
+  area-emission
+  area-emission-available
+  area-occupancy
+  area-infra-check-denied-cap-final
+  area-environment-check-denied-cap-final
+  area-environment-check-denied-cap-final-percentage
+  area-percentage-denied-cap
+  area-cap-current-list
+  area-cap-unused-list
+  area-TP-final-list
+  area-occupancy-list
+  area-infra-check-denied-cap-final-list
+  area-percentage-denied-cap-list
+
+]
+
+
+;;;;;;;;;;;;;;;;;;;;;;
+;; Setup Procedures ;;
+;;;;;;;;;;;;;;;;;;;;;;
+
+
+to setup_clear
+  clear-all
+  file-close-all
+  ;load-data-R
+;  setup-environment
+;  setup-terminals
+;  setup-areas
+;  reset-ticks
+end
+
+to setup
+  setup-environment
+  setup-terminals
+  setup-areas
+  reset-ticks
+end
+
+
+to setup-environment
+  set key-figure-truck-infra 10000
+  set key-figure-train-infra 10000
+  set key-figure-barge-infra 10000
+  set key-figure-truck-emission 1
+  set key-figure-train-emission 1
+  set key-figure-barge-emission 1
+  set year 2017
+  set test1 0
+  set TP-without-terminal-list []
+  set total-TP-rdam-list []
+  set total-surface-terminals-list []
+end
+
+to setup-terminals
+ file-open data-terminals
+  while [not file-at-end?][
+    create-terminals 1 [
+      set terminal-id count terminals - 1
+      setxy file-read file-read ;#1 #2
+      set terminal-name file-read ;#3
+      set terminal-area file-read ;#4
+      set terminal-surface file-read ;#5
+      set terminal-cap-initial file-read * 0.01 ;#6
+      set terminal-cap-EP (file-read * terminal-cap-initial) ;#7
+      set terminal-cargo-type file-read ;#8
+      set terminal-modalsplit-truck file-read ;#9
+      set terminal-modalsplit-train file-read ;#10
+      set terminal-modalsplit-barge file-read ;#11
+      set terminal-current-infra-truck file-read * 0.10 ;#12
+      set terminal-current-infra-train file-read * 0.10 ;#13
+      set terminal-current-infra-barge file-read * 0.10 ;#14
+      set terminal-construction-year file-read ;15
+      set terminal-construction-capacity file-read ;16
+      set terminal-cargo-type-new file-read ;17
+      set shape "pentagon"
+      set size 2
+
+      if terminal-cap-EP > 0 [set terminal-EP? true]
+
+       ifelse terminal-cargo-type = "Nothing" [
+         set terminal-cap-current 0][
+         set terminal-cap-current terminal-cap-initial]
+      set terminal-cap-available terminal-cap-initial
+      if terminal-area = "Maasvlakte" [set color 45]
+      if terminal-area = "Europoort" [set color 55]
+      if terminal-area = "Botlek" [set color 65]
+      if terminal-area = "Vlaardingen" [set color 75]
+      if terminal-area = "Merwe- en Vierhaven" [set color 85]
+      if terminal-area = "Waal- Eemhaven" [set color 105]
+      if terminal-area = "Dordrecht" [set color 115]
+      set terminal-cap-current-list []
+      set  terminal-cap-unused-list []
+      set  terminal-TP-final-list []
+      set  terminal-occupancy-list []
+      set  terminal-cap-expanded-list []
+      set  terminal-cap-initial-list []
+      set  terminal-infra-check-denied-cap-final-list []
+      set  terminal-surface-list []
+    ]
+  ]
+  file-close
+end
+
+to setup-areas
+  
+  file-open data-areas
+  while [not file-at-end?][
+    create-areas 1 [
+      set area-id count areas - 1
+      set area-name file-read ;#1
+      set area-emission file-read ;#2
+      setxy file-read file-read ;#3 #4
+      set shape "circle"
+      set size 3
+
+      set area-cap-initial sum[terminal-cap-initial] of terminals with [(terminal-area = [area-name] of myself) and terminal-cargo-type = "Coal"]
+      set area-cap-current area-cap-initial
+      if area-name = "Maasvlakte" [set color 43]
+      if area-name = "Europoort" [set color 53]
+      if area-name = "Botlek" [set color 63]
+      if area-name = "Vlaardingen" [set color 73]
+      if area-name = "Merwe- en Vierhaven" [set color 83]
+      if area-name = "Waal- Eemhaven" [set color 103]
+      if area-name = "Dordrecht" [set color 113]
+      set label area-name
+      set area-cap-current-list []
+      set  area-cap-unused-list []
+      set  area-TP-final-list []
+      set area-occupancy-list []
+      set area-infra-check-denied-cap-final-list []
+      set area-percentage-denied-cap-list []
+    ]
+  ]
+  file-close
+end
+
+to go
+  reset-values
+  define-coal-TP
+  define-MS-terminals
+  define-TP-areas
+  does-TP-fit-in-area ;find terminal to expand, find other area, update-area TP/capacity
+  while [ any? areas with [area-under-cap > 1] ][find-other-area]
+  update-data
+  if ticks = 38 [ stop ]
+  tick
+end
+
+
+;to load-data-R
+;  r:clear
+;  set source-name "C:/Users/Amber van Oel/Documents/SEPAM/Thesis - ABM/Global model/Netlogo oefenen/"
+;  set  R-model-name "load_data.r"
+;  set source-nameR (word source-name R-model-name)
+;  r:put "source_name" source-nameR
+;  r:eval "source(source_name)"
+;end
+
+
+to reset-values
+
+;;;;;; new project = expanding terminal
+   ask terminals with [terminal-construction-year = year and terminal-cargo-type = "Coal" and terminal-cargo-type-new = "Coal"] [
+      set terminal-cap-current terminal-construction-capacity
+      set terminal-cap-EP 0] ; if a terminal expands, there is no EP anymore
+
+;;;;;; new project = new terminal
+    ask terminals with [terminal-construction-year = year and terminal-cargo-type = "Nothing" and terminal-cargo-type-new = "Coal"] [
+      set terminal-cargo-type terminal-cargo-type-new
+      set terminal-cap-current terminal-cap-initial
+    ]
+
+;;;;;; new project = closing terminal
+    ask terminals with [terminal-construction-year = year and terminal-cargo-type = "Coal" and terminal-cargo-type-new = "Nothing"][
+      set terminal-cargo-type terminal-cargo-type-new
+      set terminal-cap-expanded 0     ;; Terminals which are closed have capacity 0, so need to have expanded capacity also 0
+      set terminal-cap-initial 0
+      set terminal-cap-unused 0
+      set terminal-occupancy 0
+      set terminal-cap-current 0]
+
+
+  ask areas [
+    set area-TP-final 0
+    set area-cap-available area-cap-current
+    set area-TP-initial 0
+    set area-TP-current 0
+    set area-TP-final 0
+    set area-under-cap 0
+    set area-added-TP 0
+    set remaining-added-TP 0
+    set area-emission-available area-emission
+    set area-infra-check-denied-cap-final 0
+    set area-environment-check-denied-cap-final 0
+    set area-percentage-denied-cap 0
+  ]
+  ask terminals [
+    set terminal-cap-available terminal-cap-current
+    set terminal-TP-final 0
+    set terminal-TP-initial 0
+    set terminal-TP-to-be-checked 0
+    set terminal-infra-check-denied-cap 0
+    set terminal-current-infra-truck-available terminal-current-infra-truck
+    set terminal-current-infra-train-available terminal-current-infra-train
+    set terminal-current-infra-barge-available terminal-current-infra-barge
+    set terminal-environment-check-denied-cap 0
+    set terminal-environment-check-denied-cap-final 0
+    set terminal-infra-check-denied-cap 0
+    set terminal-infra-check-denied-cap-final 0
+    set terminal-infra-environment-check-denied-cap 0
+    set terminal-total-TP-asked-to-check 0
+  ]
+
+
+  set TP-without-terminal 0
+  set year year + 1
+  set total-TP-rdam 0
+  set total-surface-terminals 0
+end
+
+
+to define-coal-TP
+  let i ticks
+    set TP-coal (item i TP_Coal_CD_model_NL)
+end
+
+
+to define-MS-terminals
+  ask terminals with [terminal-cargo-type = "Coal"] [
+    set terminal-MS terminal-cap-current / sum[terminal-cap-current] of terminals
+    set terminal-TP-initial terminal-MS * TP-coal ]
+  let difference-coal-terminals TP-coal - sum[terminal-TP-initial] of terminals
+  ask one-of terminals [ ;; otherwise end capacity/ms doesn't fit
+    set terminal-TP-initial terminal-TP-initial + difference-coal-terminals]
+end
+
+to define-TP-areas
+  ask areas [
+    set terminals-in-area terminals with [terminal-area = [area-name] of myself and terminal-cargo-type = "Coal"]   ;If terminals closes, cargot-type will be set to "nothing" so that a terminal does not 'exists' anymore
+    set area-TP-initial round (sum [terminal-TP-initial] of terminals-in-area)  ; define total TP in area
+    set area-TP-current area-TP-initial]
+end
+
+to does-TP-fit-in-area
+  ask areas [
+    set area-added-TP 0
+    let area-added-capacity 0
+    let expanded? false
+    ifelse area-TP-current < area-cap-available
+    [set area-added-TP area-TP-current
+     set area-added-capacity 0
+     set expanded? false    ]
+    [ifelse area-TP-current < area-cap-available + area-cap-EP
+      [set area-added-TP area-TP-current
+       set area-added-capacity area-TP-current - area-cap-available
+       set expanded? true]
+      [set area-added-TP area-cap-available + area-cap-EP
+       set area-added-capacity area-cap-EP
+       set expanded? true
+       set area-under-cap area-TP-current - area-cap-available - area-cap-EP ; changed area-cap-current to area-cap-available
+      ]]
+      divide-TP-over-terminals
+      set area-under-cap area-under-cap + remaining-added-TP
+    ]
+end
+
+to does-TP-fit-in-area-of-find-other-area
+  set area-added-TP 0
+  let area-added-capacity 0
+  let expanded? false
+  ifelse area-TP-current < area-cap-available
+    [set area-added-TP area-TP-current
+     set area-added-capacity 0
+     set expanded? false]
+    [ifelse area-TP-current < area-cap-available + area-cap-EP
+      [set area-added-TP area-TP-current
+       set area-added-capacity area-TP-current - area-cap-available
+       set expanded? true]
+      [set area-added-TP area-cap-available + area-cap-EP
+       set area-added-capacity area-cap-EP
+       set expanded? true
+       set area-under-cap area-under-cap + area-TP-current - area-cap-available - area-cap-EP]]
+       divide-TP-over-terminals
+       set area-under-cap area-under-cap + remaining-added-TP
+end
+
+To divide-TP-over-terminals
+  set number-of-terminals-in-area count terminals-in-area  ; first divide TP over existing terminal capacity, then ask all terminals with EP=true and divide
+  let i 0
+  set remaining-added-TP area-added-TP
+  ask terminals-in-area [set terminal-asked-already? false]
+  while [i < number-of-terminals-in-area and remaining-added-TP > 0 and sum[terminal-cap-available] of terminals-in-area with [terminal-asked-already? = false] > 0 ][
+      ask one-of terminals-in-area with [terminal-cap-available > 0 and terminal-asked-already? = false][
+        set terminal-total-TP-asked-to-check terminal-total-TP-asked-to-check + remaining-added-TP
+       
+        set terminal-asked-already? true
+        ifelse remaining-added-TP < terminal-cap-available
+          [;; infra/environment check with terminal-TP-to-be-checked = remaining-added-TP -> terminal-TP-to-be-checked = output to other model
+           set terminal-TP-to-be-checked remaining-added-TP
+           infra-environment-check
+           ;; terminal-infra-environment-check-denied-cap = input from other model
+           set terminal-TP-final terminal-TP-final + remaining-added-TP - terminal-infra-environment-check-denied-cap
+           set terminal-cap-available terminal-cap-available - remaining-added-TP + terminal-infra-environment-check-denied-cap
+           set remaining-added-TP terminal-infra-environment-check-denied-cap]
+          [;; infra/environment check with terminal-TP-to-be-checked = terminal-cap-available -> terminal-TP-to-be-checked = output to other model
+           set terminal-TP-to-be-checked terminal-cap-available
+          
+           infra-environment-check
+           ;; terminal-infra-environment-check-denied-cap = input from other model
+           set terminal-TP-final terminal-TP-final + terminal-cap-available - terminal-infra-environment-check-denied-cap
+           set remaining-added-TP remaining-added-TP - terminal-cap-available + terminal-infra-environment-check-denied-cap
+           set terminal-cap-available terminal-infra-environment-check-denied-cap]
+      set i i + 1] ]
+
+  let number-of-terminals-in-area-with-EP count terminals-in-area with [terminal-cap-EP > 0]
+  let j 0
+  while [j < number-of-terminals-in-area-with-EP and remaining-added-TP > 0 ][
+      ask one-of terminals-in-area with [terminal-cap-EP > 0][
+        set terminal-total-TP-asked-to-check terminal-total-TP-asked-to-check + remaining-added-TP
+        ifelse remaining-added-TP < terminal-cap-EP
+          [;; infra/environment check with terminal-TP-to-be-checked = remaining-added-TP -> terminal-TP-to-be-checked = output to other model
+           set terminal-TP-to-be-checked remaining-added-TP
+           infra-environment-check
+           ;; terminal-infra-environment-check-denied-cap = input from other model
+           set terminal-TP-final terminal-TP-final + remaining-added-TP - terminal-infra-environment-check-denied-cap
+           set terminal-cap-current terminal-cap-current + round(remaining-added-TP) - round(terminal-infra-environment-check-denied-cap)
+           set terminal-cap-EP terminal-cap-EP - remaining-added-TP + terminal-infra-environment-check-denied-cap
+           set remaining-added-TP terminal-infra-environment-check-denied-cap]
+          [;; infra/environment check with terminal-TP-to-be-checked = terminal-cap-EP -> terminal-TP-to-be-checked = output to other model
+           set terminal-TP-to-be-checked terminal-cap-EP
+           infra-environment-check
+           ;; terminal-infra-environment-check-denied-cap = input from other model
+           set terminal-TP-final terminal-TP-final + terminal-cap-EP - terminal-infra-environment-check-denied-cap
+           set terminal-cap-current terminal-cap-current + terminal-cap-EP - terminal-infra-environment-check-denied-cap
+           set remaining-added-TP remaining-added-TP - terminal-cap-EP + terminal-infra-environment-check-denied-cap
+           set terminal-cap-EP terminal-infra-environment-check-denied-cap]
+      set j j + 1] ]
+end
+
+
+to infra-environment-check
+  reset-infra-environment-data
+  modal-split
+  infra-no-vehicles
+  perform-infra-check
+  perform-environment-check
+  set terminal-infra-environment-check-denied-cap terminal-infra-check-denied-cap + terminal-environment-check-denied-cap
+end
+
+
+to reset-infra-environment-data
+ set terminal-infra-check-denied-cap 0
+ set terminal-environment-check-denied-cap 0
+ set terminal-infra-environment-check-denied-cap 0
+ set terminal-no-truck-environment-check 0
+ set terminal-no-train-environment-check 0
+ set terminal-no-barge-environment-check 0
+ set denied-no-truck 0
+ set denied-no-train 0
+ set denied-no-barge 0
+end
+
+to modal-split
+  set terminal-TP-truck terminal-TP-to-be-checked * (terminal-modalsplit-truck / 100)
+  set terminal-TP-train terminal-TP-to-be-checked * (terminal-modalsplit-train / 100)
+  set terminal-TP-barge terminal-TP-to-be-checked * (terminal-modalsplit-barge / 100)
+end
+
+
+to infra-no-vehicles
+  set terminal-no-truck terminal-TP-truck / key-figure-truck-infra ;no vehicles
+  set terminal-no-train terminal-TP-train / key-figure-train-infra ;no vehicles
+  set terminal-no-barge terminal-TP-barge / key-figure-barge-infra ;no vehicles
+end
+
+;to R-infra-no-vehicles ;R code
+;  set  R-model-name "number_of_vehicles.r"
+;  set source-nameR (word source-name R-model-name)
+;  r:put "source_name" source-nameR
+;
+;;  let terminal-TP-truck 100
+;;  let terminal-TP-train 60
+;;  let terminal-TP-barge 50
+;
+;  r:put "r_terminal_TP_truck" terminal-TP-truck
+;  r:put "r_terminal_TP_train" terminal-TP-train
+;  r:put "r_terminal_TP_barge" terminal-TP-barge
+;
+;  r:eval "source(source_name)"
+;end
+
+
+to perform-infra-check
+ifelse terminal-current-infra-truck-available > terminal-no-truck
+
+  [set infra-check-truck "positive"
+   set terminal-current-infra-truck-available terminal-current-infra-truck-available - terminal-no-truck
+   set terminal-no-truck-environment-check terminal-no-truck ]
+  [set infra-check-truck "negative"
+   set denied-no-truck terminal-no-truck - terminal-current-infra-truck-available
+   set terminal-no-truck-environment-check terminal-no-truck - terminal-current-infra-truck-available
+   set terminal-current-infra-truck-available 0
+  ]
+
+ifelse terminal-current-infra-train-available > terminal-no-train
+  [set infra-check-train "positive"
+   set terminal-current-infra-train-available terminal-current-infra-train-available - terminal-no-train
+   set terminal-no-train-environment-check terminal-no-train ]
+  [set infra-check-train "negative"
+   set denied-no-train terminal-no-train - terminal-current-infra-train-available
+   set terminal-no-train-environment-check terminal-no-train - terminal-current-infra-train-available
+   set terminal-current-infra-train-available 0]
+
+ifelse terminal-current-infra-barge-available > terminal-no-barge
+  [set infra-check-barge "positive"
+   set terminal-current-infra-barge-available terminal-current-infra-barge-available - terminal-no-barge
+   set terminal-no-barge-environment-check terminal-no-barge]
+  [set infra-check-barge "negative"
+   set denied-no-barge terminal-no-barge - terminal-current-infra-barge-available
+   set terminal-no-barge-environment-check terminal-no-barge - terminal-current-infra-barge-available   ; no vehicles
+   set terminal-current-infra-barge-available 0]
+
+set terminal-infra-check-denied-cap (denied-no-truck * key-figure-truck-infra) + (denied-no-train * key-figure-train-infra) + (denied-no-barge * key-figure-barge-infra) ;ton
+set terminal-infra-check-denied-cap-final terminal-infra-check-denied-cap-final + terminal-infra-check-denied-cap
+
+ifelse infra-check-truck = "negative" or infra-check-train = "negative" or infra-check-barge = "negative"
+  [set infra-check "negative"]
+  [set infra-check "positive"]
+end
+
+to perform-environment-check
+set terminal-emission (key-figure-truck-emission * terminal-no-truck-environment-check) + (key-figure-train-emission * terminal-no-train-environment-check) + (key-figure-barge-emission * terminal-no-barge-environment-check) ; emission
+let t-area-emission-available [area-emission-available] of areas with [area-name = [terminal-area] of myself]
+let t-area-emission-available2 first t-area-emission-available
+let test terminal-emission + t-area-emission-available2
+let a-terminal-emission terminal-emission
+ifelse terminal-emission < t-area-emission-available2
+  [ask areas with [area-name = [terminal-area] of myself] [set area-emission-available area-emission-available - a-terminal-emission]
+  set terminal-environment-check-denied-cap 0
+  ]
+  [ask areas with [area-name = [terminal-area] of myself] [set area-emission-available 0]
+   set terminal-environment-check-denied-cap (first terminal-emission * ( ((terminal-modalsplit-truck / 100) * key-figure-truck-emission) + ((terminal-modalsplit-train / 100) * key-figure-train-emission) + ((terminal-modalsplit-barge / 100) * key-figure-barge-emission)))
+   set terminal-environment-check-denied-cap-final terminal-environment-check-denied-cap-final + terminal-environment-check-denied-cap
+  ]
+end
+
+
+to find-other-area
+  ask areas [
+    set area-cap-available sum[terminal-cap-available] of terminals-in-area
+    set area-cap-EP sum[terminal-cap-EP] of terminals-in-area] ; update available cap of areas
+
+  let areas-with-under-cap areas with [area-under-cap > 0]
+  let areas-with-available-capacity areas with [sum[terminal-cap-available] of terminals-in-area + sum[terminal-cap-EP] of terminals-in-area > sum[terminal-TP-final] of terminals-in-area]
+  let number-of-areas-with-under-cap count areas-with-under-cap
+  let number-of-areas-with-available-capacity count areas-with-available-capacity
+  ifelse number-of-areas-with-under-cap >= 1 and number-of-areas-with-available-capacity >= 1 ; if there is still an area with under-cap and an area with available capacity -> then find an area to bring TP
+    [ask one-of areas-with-under-cap [
+      set TP-to-transfer area-under-cap
+      let area-to-transfer-TP-to one-of areas-with-available-capacity with [area-name != [area-name] of myself] ; transfer TP to area with enough available capacity who is not myself
+      ifelse area-to-transfer-TP-to != nobody; if true, there is an area with enough capacity available who is not myself.
+        [set area-under-cap 0
+         ask area-to-transfer-TP-to [
+            set area-TP-current TP-to-transfer
+            does-TP-fit-in-area-of-find-other-area]]
+        [set TP-without-terminal TP-without-terminal + area-under-cap ; if false, there is no area available, so TP is transfered to TP-without-terminal and area-under-cap is 0
+         set area-under-cap 0]]]
+    [set TP-without-terminal TP-without-terminal + sum[area-under-cap] of areas ;the else of: if there is no area with under-cap anymore, or no area available
+     ask areas [set area-under-cap 0]]
+end
+
+to update-data
+  ask terminals [
+    set terminal-cap-expanded terminal-cap-current - terminal-cap-initial
+    set terminal-cap-unused terminal-cap-current - terminal-TP-final
+    set terminal-occupancy (terminal-TP-final / (terminal-cap-current + 0.000001 )) * 100
+    set terminal-surface terminal-cap-current / 0.3
+  ]
+
+  ask terminals with [terminal-cargo-type = "Nothing"] [
+    set terminal-cap-expanded 0]
+
+  ask areas [
+    set area-TP-final sum[terminal-TP-final] of terminals with [terminal-area = [area-name] of myself]
+    set area-cap-current sum[terminal-cap-current] of terminals with [terminal-area = [area-name] of myself]
+    set area-cap-expanded area-cap-current - area-cap-initial
+    set area-cap-unused area-cap-current - area-TP-final
+    set area-occupancy (area-TP-final / area-cap-current ) * 100
+    set area-infra-check-denied-cap-final sum[terminal-infra-check-denied-cap-final] of terminals with [terminal-area = [area-name] of myself]
+    set area-environment-check-denied-cap-final sum[terminal-environment-check-denied-cap-final] of terminals with [terminal-area = [area-name] of myself]
+    set area-percentage-denied-cap ((area-infra-check-denied-cap-final + area-environment-check-denied-cap-final) / ((sum[terminal-total-TP-asked-to-check] of terminals with [terminal-area = [area-name] of myself]) + 0.00001) ) * 100
+    ]
+  set total-TP-rdam sum[area-TP-final] of areas
+  set total-surface-terminals sum[terminal-surface] of terminals
+
+ask areas [
+  set area-cap-current-list lput area-cap-current area-cap-current-list
+  set area-cap-unused-list lput area-cap-unused area-cap-unused-list
+  set area-TP-final-list lput area-TP-final area-TP-final-list
+  set area-occupancy-list lput area-occupancy area-occupancy-list
+  set area-infra-check-denied-cap-final-list lput area-infra-check-denied-cap-final area-infra-check-denied-cap-final-list
+  set area-percentage-denied-cap-list lput area-percentage-denied-cap area-percentage-denied-cap-list
+]
+
+ask terminals [
+  set terminal-cap-current-list lput terminal-cap-current terminal-cap-current-list
+  set terminal-cap-unused-list lput terminal-cap-unused terminal-cap-unused-list
+  set terminal-TP-final-list lput terminal-TP-final terminal-TP-final-list
+  set terminal-occupancy-list lput terminal-occupancy terminal-occupancy-list
+  set terminal-cap-expanded-list lput terminal-cap-expanded terminal-cap-expanded-list
+  set terminal-cap-initial-list lput terminal-cap-initial terminal-cap-initial-list
+  set terminal-infra-check-denied-cap-final-list lput terminal-infra-check-denied-cap-final terminal-infra-check-denied-cap-final-list
+  set terminal-surface-list lput terminal-surface terminal-surface-list
+]
+
+  set TP-without-terminal-list lput TP-without-terminal TP-without-terminal-list
+  set total-TP-rdam-list lput total-TP-rdam total-TP-rdam-list
+  set total-surface-terminals-list lput total-surface-terminals total-surface-terminals-list
+
+
+end
