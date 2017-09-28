@@ -1,0 +1,79 @@
+Sub MakeCSVSheet()
+Application.ScreenUpdating = False
+
+Path = Application.ActiveWorkbook.Path
+
+Sheets("CSVSheet").Cells.Clear
+
+
+'THESE NEED TO BE FILLED IN
+DataSheetName = Sheets("Convert to csv").Range("C4") 'Fill in the name of the sheet with data
+Filename = Sheets("Convert to csv").Range("C5") 'Fill in the name of the new CSV file
+
+With Sheets(DataSheetName)
+
+NumberOfDataLines = .Cells(Rows.Count, "A").End(xlUp).Row
+NumberOfDataColumns = .Cells(3, Columns.Count).End(xlToLeft).Column
+'DataRange = .Range(Cells(3, 1), Cells(NumberOfDataLines, NumberOfDataColumns))
+
+i = 3 'first 2 lines ares column names and int/str
+Do Until i = NumberOfDataLines + 1
+    j = 2
+    Do Until j = NumberOfDataColumns + 1
+    If .Cells(2, j) = "Int" Then
+    'When the value of a cell is an integer, no added actions
+    Sheets("CSVSheet").Range("A" & i - 2) = Sheets("CSVSheet").Range("A" & i - 2) & " " & .Cells(i, j)
+    Else
+    'When the value of a cell is a string, add quotation marks
+    Sheets("CSVSheet").Range("A" & i - 2) = Sheets("CSVSheet").Range("A" & i - 2) & " " & Chr(34) & .Cells(i, j) & Chr(34)
+    End If
+
+    j = j + 1
+    Loop
+    
+i = i + 1
+Loop
+
+End With
+
+
+Path = Application.ActiveWorkbook.Path
+
+With Sheets("CSVSheet")
+    .Range("A1:A" & NumberOfDataLines).Copy
+    Workbooks.Add
+    ActiveSheet.Paste
+    Application.CutCopyMode = False
+    ActiveWorkbook.SaveAs Filename:=Path & "\" & Filename & ".prn", FileFormat:=xlTextPrinter, CreateBackup:=False
+    ActiveWorkbook.Close
+    
+    OldFileName = "\" & Filename & ".prn"
+    NewFileName = "\" & Filename & ".csv"
+    Name Path & OldFileName As Path & NewFileName
+    
+End With
+
+End Sub
+
+Sub Save_Terminal_Data_CSV()
+
+Filename = "DataTerminalsTest123"
+Path = Application.ActiveWorkbook.Path
+
+With Sheets("CSVSheet")
+    NumberOfTerminals = .Cells(Rows.Count, "A").End(xlUp).Row
+    '.Cells.Select
+    .Range("A1:A" & NumberOfTerminals).Copy
+    Workbooks.Add
+    ActiveSheet.Paste
+    Application.CutCopyMode = False
+    ActiveWorkbook.SaveAs Filename:=Path & "\" & Filename & ".prn", FileFormat:=xlTextPrinter, CreateBackup:=False
+    ActiveWorkbook.Close
+    
+    OldFileName = "\" & Filename & ".prn"
+    NewFileName = "\" & Filename & ".csv"
+    Name Path & OldFileName As Path & NewFileName
+    
+End With
+
+End Sub
